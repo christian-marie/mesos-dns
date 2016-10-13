@@ -70,6 +70,14 @@ func A(hdr dns.RR_Header, ip net.IP) *dns.A {
 	}
 }
 
+// PTR returns a PTR record set with the given arguments.
+func PTR(hdr dns.RR_Header, ptr string) *dns.PTR {
+	return &dns.PTR{
+		Hdr: hdr,
+		Ptr: ptr,
+	}
+}
+
 // SRV returns a SRV record set with the given arguments.
 func SRV(hdr dns.RR_Header, target string, port, priority, weight uint16) *dns.SRV {
 	return &dns.SRV{

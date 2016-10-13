@@ -108,12 +108,19 @@ func (res *Resolver) records() *records.RecordGenerator {
 func (res *Resolver) LaunchDNS() <-chan error {
 	// Handers for Mesos requests
 	dns.HandleFunc(res.config.Domain+".", panicRecover(res.HandleMesos))
+
+	if (res.config.ReverseDNSOn) {
+		dns.HandleFunc("in-addr.arpa.", panicRecover(res.HandleMesos))
+		dns.HandleFunc("ip6.arpa.", panicRecover(res.HandleMesos))
+	}
+
 	// Handlers for nonMesos requests
 	for zone, fwd := range res.zoneFwds {
 		dns.HandleFunc(
 			zone+".",
 			panicRecover(res.HandleNonMesos(fwd)))
 	}
+
 	dns.HandleFunc(
 		".",
 		panicRecover(res.HandleNonMesos(res.defaultFwd)))
@@ -226,6 +233,20 @@ func (res *Resolver) formatA(dom string, target string) (*dns.A, error) {
 	}, nil
 }
 
+// returns the PTR resource record pointing from dom (ip) to ptr
+func (res *Resolver) formatPTR(dom string, ptr string) (*dns.PTR, error) {
+	ttl := uint32(res.config.TTL)
+
+	return &dns.PTR{
+		Hdr: dns.RR_Header{
+			Name:   dom,
+			Rrtype: dns.TypePTR,
+			Class:  dns.ClassINET,
+			Ttl:    ttl},
+		Ptr: ptr,
+	}, nil
+}
+
 // formatSOA returns the SOA resource record for the mesos domain
 func (res *Resolver) formatSOA(dom string) *dns.SOA {
 	ttl := uint32(res.config.TTL)
@@ -318,6 +339,8 @@ func (res *Resolver) HandleMesos(w dns.ResponseWriter, r *dns.Msg) {
 		errs.Add(res.handleSRV(rs, name, m, r))
 	case dns.TypeA:
 		errs.Add(res.handleA(rs, name, m))
+	case dns.TypePTR:
+		errs.Add(res.handlePTR(rs, name, m))
 	case dns.TypeSOA:
 		errs.Add(res.handleSOA(m, r))
 	case dns.TypeNS:
@@ -388,6 +411,23 @@ func (res *Resolver) handleA(rs *records.RecordGenerator, name string, m *dns.Ms
 			continue
 		}
 		m.Answer = append(m.Answer, rr)
+	}
+	return errs
+}
+
+func (res *Resolver) handlePTR(rs *records.RecordGenerator, name string, m *dns.Msg) error {
+	var errs multiError
+	ptrs := rs.PTRs[name]
+	// > 1 PTR for a given IP implies ambiguity, so, no soup for you!
+	if len(ptrs) < 2 {
+		for ptr := range ptrs {
+			rr, err := res.formatPTR(name, ptr)
+			if err != nil {
+				errs.Add(err)
+				continue
+			}
+			m.Answer = append(m.Answer, rr)
+		}
 	}
 	return errs
 }

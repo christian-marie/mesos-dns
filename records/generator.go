@@ -22,6 +22,7 @@ import (
 	"github.com/mesosphere/mesos-dns/records/labels"
 	"github.com/mesosphere/mesos-dns/records/state"
 	"github.com/mesosphere/mesos-dns/urls"
+	"github.com/miekg/dns"
 	"github.com/tv42/zbase32"
 )
 
@@ -75,6 +76,8 @@ type rrsKind string
 const (
 	// A record types
 	A rrsKind = "A"
+	// PTR record types
+	PTR = "PTR"
 	// SRV record types
 	SRV = "SRV"
 )
@@ -83,6 +86,8 @@ func (kind rrsKind) rrs(rg *RecordGenerator) rrs {
 	switch kind {
 	case A:
 		return rg.As
+	case PTR:
+		return rg.PTRs
 	case SRV:
 		return rg.SRVs
 	default:
@@ -95,6 +100,7 @@ func (kind rrsKind) rrs(rg *RecordGenerator) rrs {
 type RecordGenerator struct {
 	As            rrs
 	SRVs          rrs
+	PTRs          rrs
 	SlaveIPs      map[string]string
 	EnumData      EnumerationData
 	httpClient    httpcli.Doer
@@ -331,8 +337,9 @@ func hostToIP4(hostname string) (string, bool) {
 func (rg *RecordGenerator) InsertState(sj state.State, domain, ns, listener string, masters, ipSources []string, spec labels.Func) error {
 
 	rg.SlaveIPs = map[string]string{}
-	rg.SRVs = rrs{}
 	rg.As = rrs{}
+	rg.SRVs = rrs{}
+	rg.PTRs = rrs{}
 	rg.frameworkRecords(sj, domain, spec)
 	rg.slaveRecords(sj, domain, spec)
 	rg.listenerRecord(listener, ns)
@@ -554,6 +561,10 @@ func (rg *RecordGenerator) taskContextRecord(ctx context, task state.Task, f sta
 	rg.insertTaskRR(arec+tail, ctx.taskIP, A, enumTask)
 	rg.insertTaskRR(canonical+tail, ctx.taskIP, A, enumTask)
 
+	// insert PTR records, these are only served when ReverseDnsOn is true,
+	// which sets up a handler for the reveverse DNS zones
+	rg.insertTaskRR(arec+tail, ctx.taskIP, PTR, enumTask)
+
 	rg.insertTaskRR(arec+".slave"+tail, ctx.slaveIP, A, enumTask)
 	rg.insertTaskRR(canonical+".slave"+tail, ctx.slaveIP, A, enumTask)
 
@@ -651,6 +662,15 @@ func (rg *RecordGenerator) insertTaskRR(name, host string, kind rrsKind, enumTas
 
 func (rg *RecordGenerator) insertRR(name, host string, kind rrsKind) (added bool) {
 	if rrsByKind := kind.rrs(rg); rrsByKind != nil {
+		if kind == PTR {
+			// Flip the octets, add .in-addr.arpa etc
+			rev, err := dns.ReverseAddr(host)
+			if err != nil {
+				return false
+			}
+			host = name
+			name = rev
+		}
 		if added = rrsByKind.add(name, host); added {
 			logging.VeryVerbose.Println("[" + string(kind) + "]\t" + name + ": " + host)
 		}

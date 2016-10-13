@@ -28,6 +28,7 @@ The configuration file should include the following fields:
   "timeout": 5, 
   "httpon": true,
   "dnson": true,
+  "reversednson": false,
   "httpport": 8123,
   "externalon": true,
   "listener": "10.101.160.16",
@@ -84,6 +85,13 @@ It is sufficient to specify just one of the `zk` or `masters` field. If both are
 `dnson` is a boolean field that controls whether Mesos-DNS listens for DNS requests or not. The default value is `true`. 
 
 `httpon` is a boolean field that controls whether Mesos-DNS listens for HTTP requests or not. The default value is `true`. 
+
+`reversednson` is a boolean field that controls whether Mesos-DNS acts as an
+authoritative nameserver for the in-addr.arpa and ip6.arpa domains, returning
+unambiguous PTR records to tasks dynamically. Enabling this option will turn
+off the previous default of forwarding reverse DNS lookups, which could break
+many set-ups. It is recommended only to use this experimental feature if you
+know what you are doing.
 
 `httpport` is the port number that Mesos-DNS monitors for incoming HTTP requests. The default value is `8123`.
 

@@ -66,8 +66,9 @@ type Config struct {
 	HTTPListener string
 	// Value of RecursionAvailable for responses in Mesos domain
 	RecurseOn bool
-	// Enable serving DSN and HTTP requests
+	// Enable serving DNS, reverse DNS, and HTTP requests
 	DNSOn  bool `json:"DnsOn"`
+	ReverseDNSOn bool `json:"ReverseDnsOn"`
 	HTTPOn bool `json:"HttpOn"`
 	// Enable replies for external requests
 	ExternalOn bool

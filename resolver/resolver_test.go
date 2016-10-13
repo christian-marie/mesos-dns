@@ -130,6 +130,25 @@ func runHandlers() error {
 					A(RRHeader("chronos.marathon.mesos.", dns.TypeA, 60),
 						net.ParseIP("1.2.3.11")))),
 		},
+		{ // PTR, unique
+			res.HandleMesos,
+			Message(
+				Question("12.3.2.1.in-addr.arpa.", dns.TypePTR),
+				Header(true, dns.RcodeSuccess),
+				Answers(
+					PTR(RRHeader("12.3.2.1.in-addr.arpa.", dns.TypePTR, 60),
+						"reviewbot.marathon.mesos."),
+					)),
+		},
+		{ // PTR, multiple results, ambiguous
+			res.HandleMesos,
+			Message(
+				Question("11.3.2.1.in-addr.arpa.", dns.TypePTR),
+				Header(true, dns.RcodeNameError),
+				NSs(
+					SOA(RRHeader("11.3.2.1.in-addr.arpa.", dns.TypeSOA, 60),
+						"ns1.mesos", "root.ns1.mesos", 60))),
+		},
 		{
 			res.HandleMesos,
 			Message(
