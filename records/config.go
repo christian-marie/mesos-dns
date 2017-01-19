@@ -1,6 +1,7 @@
 package records
 
 import (
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
@@ -81,11 +82,18 @@ type Config struct {
 	// CA certificate to use to verify Mesos Master certificate
 	CACertFile string
 
+	// Client certificate to use.
+	CertFile string
+	// Client certificate key to use.
+	KeyFile string
+
 	MesosCredentials basic.Credentials
 	// IAM Config File
 	IAMConfigFile string
 
 	caPool *x509.CertPool
+
+	cert tls.Certificate
 
 	httpConfigMap httpcli.ConfigMap
 
@@ -157,7 +165,14 @@ func SetConfig(cjson string) Config {
 	}
 
 	c.initSOA()
+	c.initCertificates()
+	c.initMesosAuthentication()
+	c.log()
 
+	return *c
+}
+
+func (c *Config) initCertificates() {
 	if c.CACertFile != "" {
 		pool, err := readCACertFile(c.CACertFile)
 		if err != nil {
@@ -166,10 +181,21 @@ func SetConfig(cjson string) Config {
 		c.caPool = pool
 	}
 
-	c.initMesosAuthentication()
-	c.log()
+	if c.CertFile != "" && c.KeyFile == "" {
+		logging.Error.Fatalf("Missing private key")
+	}
 
-	return *c
+	if c.CertFile == "" && c.KeyFile != "" {
+		logging.Error.Fatalf("Missing certificate")
+	}
+
+	if c.CertFile != "" && c.KeyFile != "" {
+		cert, err := tls.LoadX509KeyPair(c.CertFile, c.KeyFile)
+		if err != nil {
+			logging.Error.Fatal(err.Error())
+		}
+		c.cert = cert
+	}
 }
 
 func (c *Config) initMesosAuthentication() {
@@ -251,6 +277,8 @@ func (c Config) log() {
 	logging.Verbose.Println("   - EnumerationOn", c.EnumerationOn)
 	logging.Verbose.Println("   - MesosHTTPSOn", c.MesosHTTPSOn)
 	logging.Verbose.Println("   - CACertFile", c.CACertFile)
+	logging.Verbose.Println("   - CertFile", c.CertFile)
+	logging.Verbose.Println("   - KeyFile", c.KeyFile)
 	logging.Verbose.Println("   - MesosAuthentication: ", c.MesosAuthentication)
 	switch c.MesosAuthentication {
 	case httpcli.AuthBasic:
